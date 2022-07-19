@@ -1,0 +1,219 @@
+﻿<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<dom-module id="kozmix-login">
+	<template>
+		<style is="custom-style">
+		</style>
+
+		<iron-ajax id="loginRequest" url="[[webApiUrl]]/login" method="POST" handle-as="json" content-type="application/json" with-credentials="true" loading="{{_loginLoading}}" on-response="_onLoginResponse" on-error="_onLoginError"></iron-ajax>
+		<iron-ajax id="loginAckRequest" url="[[webApiUrl]]/login-ack" method="GET" handle-as="json" content-type="application/json" with-credentials="true" loading="{{_loginAckLoading}}" on-response="_onLoginAckResponse" on-error="_onLoginError"></iron-ajax>
+
+		<app-localstorage-document id="localStorage" key="[[storedUserDataKey]]" data="{{_storedUserData}}"></app-localstorage-document>
+	</template>
+
+	<script>
+		Polymer({
+			is: 'kozmix-login',
+			properties: {
+				webApiUrl: {
+					type: String,
+					value: ''
+				},
+				loginInProgress: {
+					type: Boolean,
+					computed: '_computeLoginInProgress(_loginLoading, _loginAckLoading)',
+					notify: true
+				},
+				userId: {
+					type: Number,
+					value: 0,
+					notify: true
+				},
+				userEduPersonId: {
+					type: Number,
+					value: 0,
+					notify: true
+				},
+				userName: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRole: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userDisplayName: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userEmail: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userAvatarUrl: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRegistrationState: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRoles: {
+					type: Array,
+					value: [],
+					notify: true
+				},
+				currentUserRoleId: {
+					type: Number,
+					value: 0,
+					notify: true
+				},
+				requiredConsents: {
+					type: Object,
+					value: null,
+					notify: true
+				},
+				rememberOnlyStudents: {
+					type: Boolean,
+					value: false
+				},
+				maxStoredUserData: {
+					type: Number,
+					value: 0
+				},
+				storedUserDataKey: {
+					type: String,
+					value: ''
+				},
+				_storedUserData: {
+					type: Array,
+					value: []
+				},
+				_loginResponse: {
+					type: Object,
+					value: null,
+				},
+				_loginLoading: {
+					type: Boolean,
+					value: false
+				},
+				_loginAckLoading: {
+					type: Boolean,
+					value: false
+				},
+			},
+			behaviors: [
+				Polymer.AppLocalizeBehavior
+			],
+			attached: function () {
+			},
+			loginUser: function (userName, password, rememberMe) {
+				if (this.$.loginRequest.loading) return;			
+				this.$.loginRequest.body = { UserName: userName, Password: password, RememberMe: rememberMe };
+				this.$.loginRequest.generateRequest();
+			},
+			reset: function () {
+			},
+			_onLoginResponse: function (event, request) {
+				var response = event.detail.response;
+				if (response != null && response.isSuccess) {
+					this._loginResponse = response.data;
+					this.$.loginAckRequest.generateRequest(); // verify user is logged in
+				} else {
+					this._loginResponse = null; // reset
+					this.userRole = '';
+					this.fire('login-error');
+				}
+			},
+			_onLoginAckResponse: function (event, request) {
+				var response = event.detail.response;
+
+				var isSuccess = response != null
+					&& response.isSuccess
+					&& this._loginResponse != null;
+				
+				if (!isSuccess) {
+					this._loginResponse = null; // reset
+					this.userRole = 'guest';
+					this.fire('login-error');
+					return;
+				}
+				
+				var saveLogin = false;
+				if (this.rememberOnlyStudents) {
+					for(var i = 0; i < this._loginResponse.roles.length; i++) {
+						var role = this._loginResponse.roles[i];
+						if (role.id == this._loginResponse.currentRoleId && role.role == 'student') {
+							saveLogin = true;
+							break;
+						}
+					}
+				}
+				else {
+					saveLogin = true;
+				}
+
+				if (saveLogin) {
+					this._storeUserData(this._loginResponse.id, this._loginResponse.userName, this._loginResponse.displayName, this._loginResponse.email,
+						this._loginResponse.avatarUrl, this._loginResponse.currentRoleId);
+				}
+
+				this.userEduPersonId = this._loginResponse.eduPersonId;
+				this.userName = this._loginResponse.userName;
+				this.userRoles = this._loginResponse.roles;
+				this.currentUserRoleId = this._loginResponse.currentRoleId;
+				this.userAvatarUrl = this._loginResponse.avatarUrl == undefined ? 'images/avatars/avatar-guest.png' : this._loginResponse.avatarUrl;
+				this.userDisplayName = this._loginResponse.displayName;
+				this.userEmail = this._loginResponse.email;
+				this.requiredConsents = this._loginResponse.requiredConsents;
+				this.userRegistrationState = this._loginResponse.registrationState;
+				this.userId = this._loginResponse.id; // triggers redirect
+
+				this._loginResponse = null; // reset
+
+				this.fire('logged-in');
+			},
+			_onLoginError: function (event, detail) {
+				var response = detail.request.xhr.response;
+				if (typeof response === 'string' || response instanceof String) response = JSON.parse(response);
+
+				var errors = response != null ? response.errors : null;
+				this.fire('login-error', { errors: errors });
+			},
+			_storeUserData: function (id, userName, displayName, email, avatarUrl, roleId) {
+				if (this._storedUserData == null) this._storedUserData = [];
+
+				var userDatas = this._storedUserData.filter(function (obj) { return obj.userName == userName; });
+				var userData = userDatas.length > 0 ? userDatas[0] : {};
+
+				if (userDatas.length == 0 && this.maxStoredUserData > 0 && this._storedUserData.length >= this.maxStoredUserData) {
+					this.splice('_storedUserData', 0, this._storedUserData.length - this.maxStoredUserData + 1);
+				}
+
+				userData.userName = userName;
+				userData.displayName = displayName;
+				userData.email = email;
+				userData.avatarUrl = avatarUrl;
+				userData.roleId = roleId;
+
+				if (userDatas.length == 0) {
+					this.push('_storedUserData', userData);
+				}
+				else {
+					// Force save. If user data already exists, changes to userData does not trigger save automatically.
+					// However, calling this.set('_storedUserData.index.property', value); does trigger save.
+					this.$.localStorage.save(this.$.localStorage.key);
+				}
+			},
+			_computeLoginInProgress: function (loginLoading, loginAckLoading) {
+				return loginLoading || loginAckLoading;
+			}
+		});
+	</script>
+</dom-module>

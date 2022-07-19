@@ -1,0 +1,785 @@
+﻿<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="kozmix-register-container.html">
+<link rel="import" href="kozmix-register-unavailable-container.html">
+
+<dom-module id="kozmix-page-login">
+	<template>
+		<style is="custom-style" include="shared-styles iron-flex iron-flex-alignment">
+
+			.identity-providers-container {
+				width: auto !important;
+				margin-top: 25px !important;
+				text-align: center;
+			}
+
+			.identity-providers paper-button {
+				width: 100px;
+				height: 36px;
+				margin: 0;
+			}
+
+			.identity-providers .facebook {
+				background-color:#4862a3;
+			}
+
+			.identity-providers .google {
+				background-color:#d73d32;
+				margin: 0 4px;
+			}
+
+			.identity-providers .microsoft {
+				background-color:#89c21a;
+			}
+
+			h1 {
+				font-size: 1.25rem;
+				color: #414040;
+				font-weight: normal;
+				display: inline;
+				margin-top: 0;
+			}
+
+			h3 {
+				font-size: 0.875rem;
+				font-weight: normal;
+				color: rgba(0,0,0,0.54);
+				margin-top: 6px;
+			}
+
+			paper-material {
+				padding: 25px;
+			}
+
+			.identity-providers iron-icon {
+				height: 24px;
+				width: 24px;
+				margin-top: -4px;
+				--iron-icon-fill-color: white;
+			}
+
+			 paper-button {
+				font-size: 0.875rem;
+			 }
+
+			 .logo-container {
+				 text-align: center;
+				 margin-bottom: -25px;
+				 z-index: 5;
+				 position: relative;
+			 }
+
+
+			paper-icon-button {
+				color: rgba(0,0,0,0.54);
+			}
+
+			.form {
+				margin: 0px 0 20px 0;
+			}
+
+			paper-item-body {
+				margin-left: 15px;
+				--paper-item-body-secondary-color: rgba(0,0,0,0.54);
+			}
+
+			paper-spinner { margin-right: 15px; }
+
+			paper-icon-item {
+				padding: 0;
+				margin-top: 10px;
+
+				--paper-item-focused-before: {
+					content: none;
+				}
+				--paper-item-icon-width: '60px';
+			}
+
+			paper-material {
+				margin: 0 !important;
+			}
+
+			#loginInProgressSpinner{
+				margin-top: 3px;
+			}
+
+			.wrapper {
+				margin: auto auto;
+				max-width: 500px;
+				padding: 20px;
+				margin-top: -30px;
+			}
+
+			.register-user iron-icon {
+				--iron-icon-fill-color: white;
+				margin-right: 10px;
+				margin-left: 5px;
+			}
+
+			.buttons-wrapper {
+				@apply(--layout-horizontal);
+			}
+
+			@media (max-width: 700px) {
+				.register-user[raised] {
+					background-color: transparent !important;
+					color: var(--default-primary-color) !important;
+					box-shadow: none;
+				}
+
+				.register-user iron-icon {
+					display: none;
+				}
+			}
+
+			@media (max-width: 420px) {
+				.logo-container iron-image {
+					width: 80% !important;
+				}
+
+				.wrapper {
+					margin-top: -20px;
+				}
+
+				.buttons-wrapper {
+					@apply(--layout-vertical-reverse);
+				}
+
+				paper-spinner-lite { display: none; }
+				paper-spinner-lite[active] { display: inherit; }
+
+				#loginInProgressSpinner {
+					margin: 0 auto 12px auto;
+				}
+			}
+
+			p {
+				margin: 8px 0;
+				font-size: 14px;
+				line-height: 17px;
+				color: rgba(0,0,0,0.54);
+			}
+
+			#register, #noregister {
+				position: absolute;
+				background-color: var(--default-primary-color);
+				color: white !important;
+				text-align: center;
+				width: auto;
+				line-height: 25px;
+				display: none;
+				left: 0;
+				top: 0;
+			}
+
+			#loginRegisterContainer {
+				padding-bottom: 30px;
+				transition: all 0.25s;
+				transition-delay: 0.25s;
+				width: auto;
+			}
+
+			#loginRegisterContainer.tall {
+				padding-bottom: 185px;
+				transition: all 0.25s;
+			}
+
+			.register-panel {
+				margin-top: 24px !important;
+				padding-top: 14px;
+				padding-bottom: 16px;
+				color: rgb(99,99,99);
+			}
+
+			.register-panel paper-button {
+				margin-right: -10px;
+			}
+
+			@media (max-height: 700px) {
+				.logo-container iron-image {
+					display: none;
+				}
+
+				.logo-container  {
+					margin-bottom: 40px;
+				}
+			}
+
+			.user-avatar {
+				display: inline-block;
+				width: 60px;
+				height: 60px;
+				border-radius: 50%;
+				overflow: hidden;
+				background: #ccc;
+				background-size: cover;
+
+				/* webkit hack for border radius with transform */
+				transition: transform 350ms ease-in-out;
+				will-change: transform;
+			}
+
+			.register-user {
+				margin-top: 5px;
+				margin-right: 20px;
+			}
+
+			paper-checkbox div {
+				margin-top: 3px;
+			}
+		</style>
+
+		<iron-ajax id="resetPasswordRequest" url="[[webApiUrl]]/reset-password-request" method="POST" handle-as="json" content-type="application/json" on-response="_onResetPasswordRequestResponse" on-error="_onResetPasswordRequestError"></iron-ajax>
+
+		<kozmix-login id="login" web-api-url="[[webApiUrl]]" login-in-progress="{{loginInProgress}}" user-id="{{userId}}" user-name="{{userName}}" user-role="{{userRole}}" user-registration-state="{{userRegistrationState}}" 
+					  user-edu-person-id="{{userEduPersonId}}" user-display-name="{{userDisplayName}}" user-email="{{userEmail}}" user-avatar-url="{{userAvatarUrl}}" user-roles="{{userRoles}}" 
+					  current-user-role-id="{{currentUserRoleId}}" required-consents="{{requiredConsents}}" stored-user-data-key="storedUserData" max-stored-user-data="1" on-logged-in="_onLoggedIn" on-login-error="_onLoginError">
+		</kozmix-login>
+
+		<app-localstorage-document key="storedUserData" data="{{_storedUserData}}"></app-localstorage-document>
+
+		<div class="layout horizontal center">
+			<paper-icon-button icon="kozmix:arrow-back" class="primary" style="margin: 15px;" on-tap="_navigateBack"></paper-icon-button>
+
+			<template is="dom-if" if="[[_appSettings.useUserRegistration]]">
+				<div class="flex"></div>
+				<paper-button class="register-user" raised on-tap="_toggleRegisterTapped">
+					<iron-icon icon="kozmix:person-add"></iron-icon>
+					[[localize('pageTitleRegister')]]
+				</paper-button>
+			</template>
+		</div>
+
+		<div class="wrapper">
+
+			<div class="logo-container">
+				<template is="dom-if" if="[[_equals(_appUI, 'kozmix')]]">
+					<iron-image src="[[_getCharacterImageURL(language, _appUI)]]" sizing="contain" style="width: 100%; height: 300px;"></iron-image>
+				</template>
+				<template is="dom-if" if="[[_equalsAny(_appUI, 'fs', 'wp')]]">
+					<iron-image src="../../images/logo-[[_appUI]].svg" sizing="contain" style="width: 50%; height: 150px; margin-bottom: 60px; margin-top: -20px;"></iron-image>
+				</template>
+			</div>
+
+			<div style="position: relative">
+				<paper-material id="loginRegisterContainer" style="overflow: hidden;">
+
+					<div hidden$="[[viewRegistration]]">
+						<div class="layout horizontal">
+							<h1>[[_computePageTitle(_resetModeActive, localize)]]</h1>
+							<div class="flex"></div>
+							<kozmix-help-icon language="[[language]]" help-path="[[localize('pageRouteHelpGuideLogin')]]" hidden$="[[_resetModeActive]]"></kozmix-help-icon>
+							<paper-icon-button style="margin-top: -8px;" icon="kozmix:clear" on-tap="_disableResetPasswordMode" hidden$="[[!_resetModeActive]]"></paper-icon-button>
+						</div>
+
+
+						<p hidden$="[[!_resetModeActive]]">[[localize('resetPasswordExplanation')]]</p>
+						<form is="iron-form" id="loginForm" autocomplete="on" method="post" action="/" on-iron-form-presubmit="_onLoginFormPresubmit" novalidate>
+
+							<template is="dom-if" if="[[_isUserRemembered]]" restamp="true">
+								<paper-icon-item>
+									<div class="avatar" item-icon>
+										<iron-image item-icon src="[[_rememberedUserAvatar]]" class="user-avatar" alt="avatar" sizing="cover" preload placeholder="images/avatars/avatar-guest.png"></iron-image>
+									</div>
+
+									<paper-item-body two-line>
+										<div>[[_rememberedUserDisplayName]]</div>
+										<div secondary>[[_rememberedUserEmail]]</div>
+									</paper-item-body>
+									<paper-icon-button icon="kozmix:clear" hidden$="[[_resetModeActive]]" on-tap="_onClearRememberedUserButtonTapped"></paper-icon-button>
+								</paper-icon-item>
+								<paper-input id="userNameInput" on-keydown="_checkForSubmitByEnter" name="username" autocomplete label="[[localize('formLabelUsername')]]" error-message="[[localize('errorMessageEnterUsername')]]" disabled="[[loginInProgress]]" value="[[_rememberedUserNameOrEmail]]" required auto-validate hidden></paper-input>
+								<paper-input id="passwordInput" on-keydown="_checkForSubmitByEnter" name="password" hidden$="[[_resetModeActive]]" autocomplete="current-password" label="[[localize('formLabelPassword')]]" type="password" error-message="[[localize('errorMessageEnterPassword')]]" disabled="[[loginInProgress]]" required auto-validate></paper-input>
+								<paper-checkbox id="rememberMeCheckbox" on-keydown="_checkForSubmitByEnter" name="rememberMeCheckbox" hidden$="[[_resetModeActive]]" disabled="[[loginInProgress]]" autocomplete class="flex" style="margin-top: 20px;"><div>[[localize('remember')]]</div></paper-checkbox>
+								<br />
+								<br />
+								<br />
+							</template>
+
+							<template is="dom-if" if="[[!_isUserRemembered]]" restamp="true">
+								<div class="form layout vertical">
+									<paper-input id="userNameInput" autocomplete name="username" on-keydown="_checkForSubmitByEnter" label="[[localize('formLabelUsername')]]" error-message="[[localize('errorMessageEnterUsername')]]" disabled="[[loginInProgress]]" value="{{_userNameOrEmail}}" required auto-validate></paper-input>
+									<paper-input id="passwordInput"  autocomplete="current-password" name="password" hidden$="[[_resetModeActive]]" on-keydown="_checkForSubmitByEnter" label="[[localize('formLabelPassword')]]" type="password" error-message="[[localize('errorMessageEnterPassword')]]" disabled="[[loginInProgress]]" auto-validate required></paper-input>
+									<paper-checkbox id="rememberMeCheckbox" on-keydown="_checkForSubmitByEnter" name="rememberMeCheckbox" hidden$="[[_resetModeActive]]" disabled="[[loginInProgress]]" autocomplete class="flex" style="margin-top: 20px;"><div>[[localize('remember')]]</div></paper-checkbox>
+									<br />
+								</div>
+							</template>
+
+							<div class="buttons-wrapper">
+								<div class="flex"></div>
+								<paper-spinner-lite id="loginInProgressSpinner" active="[[loginInProgress]]"></paper-spinner-lite>
+								<paper-button id="resetPasswordButton" class="solo-text" disabled="[[loginInProgress]]" hidden$="[[_resetModeActive]]" on-tap="_onResetPasswordButtonTapped">[[localize('forgottenPassword')]]</paper-button>
+								<paper-button id="loginButton" disabled="[[loginInProgress]]" hidden$="[[_resetModeActive]]" on-tap="_onLoginButtonTapped" raised>[[localize('login')]]</paper-button>
+
+								<paper-button id="confirmResetPassowordButton" disabled$="[[_confirmResetPassowordButtonDisabled]]" hidden$="[[!_resetModeActive]]" on-tap="_onConfirmResetPasswordButtonTapped" raised>[[localize('confirm')]]</paper-button>
+							</div>
+
+							<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
+
+						</form>
+					</div>
+
+					<div hidden$="[[_appSettings.useUserRegistration]]">
+						<kozmix-register-unavailable-container id="noregister" active="[[viewRegistration]]" language="[[language]]"></kozmix-register-unavailable-container>
+					</div>
+				</paper-material>
+			</div>
+
+			<!--
+			<template is="dom-if" if="[[_appSettings.useUserRegistration]]">
+				<paper-material class="register-panel layout horizontal center" hidden$="[[!_isResetPasswordButtonVisible]]">
+					<div class="flex">[[localize('noAccountYet')]]</div>
+					<paper-button id="registerButton" disabled="[[loginInProgress]]" class="solo-text" on-tap="_toggleRegisterTapped">[[localize('register')]]</paper-button>
+				</paper-material>
+			</template>
+			-->
+
+			<template is="dom-if" if="[[_areSocialLoginProvidersSupported(_appSettings)]]">
+				<paper-material class="identity-providers-container">
+					<h3>[[localize('loginTroughSocialNetwork')]]</h3>
+					<div class="identity-providers">
+						<template is="dom-if" if="[[_isLoginSupported('facebook', _appSettings)]]">
+							<a href="[[webApiUrl]]/auth/facebook?Continue=[[_computeRedirectUri(_appRouteBase, localize)]]" rel="external" tabindex="-1" on-tap="_processRiamLoginTap"><paper-button class="facebook"><iron-icon icon="kozmix:facebook"></iron-icon></paper-button></a>
+						</template>
+						<template is="dom-if" if="[[_isLoginSupported('googleoauth', _appSettings)]]">
+							<a href="[[webApiUrl]]/auth/googleoauth?Continue=[[_computeRedirectUri(_appRouteBase, localize)]]" rel="external" tabindex="-1" on-tap="_processRiamLoginTap"><paper-button class="google"><iron-icon icon="kozmix:google"></iron-icon></paper-button></a>
+						</template>
+					</div>
+				</paper-material>
+			</template>
+
+			<template is="dom-if" if="[[_equals(_appUI, 'fs')]]">
+				<fs-kozmix-account-reminder language="[[language]]"></fs-kozmix-account-reminder>
+			</template>
+
+			<template is="dom-if" if="[[_equals(_appUI, 'kozmix')]]">
+				<kozmix-switch-to-kids-ui-notifier language="[[language]]" hidden$="[[_resetModeActive]]"></kozmix-switch-to-kids-ui-notifier>
+			</template>
+
+			<!--
+			<paper-material class="register-panel layout vertical center" style="padding-top: 20px; font-size: 14px;">
+				Deti sa budú prihlasovať cez detské rozhranie...
+				<paper-button class="solo-text" style="margin-top: 7px;  margin-left: 0;">Otvoriť detské rozhranie</paper-button>
+			</paper-material>
+			-->
+
+		</div>
+
+		<kozmix-app-proxy settings="{{_appSettings}}" app-route-base="{{_appRouteBase}}" app-u-i="{{_appUI}}"></kozmix-app-proxy>
+
+		<paper-dialog id="indicateExternalProviderLoginProgress" modal style="background-color: transparent; box-shadow: none;">
+			<paper-spinner-lite active></paper-spinner-lite>
+		</paper-dialog>
+
+	</template>
+
+	<script>
+		Polymer({
+			is: 'kozmix-page-login',
+			behaviors: [
+				Polymer.AppLocalizeBehavior
+			],
+			properties: {
+				_appUI: String,
+				webApiUrl: {
+					type: String,
+					value: ''
+				},
+				pageVisible: {
+					type: Boolean,
+					value: false
+				},
+				loginInProgress: {
+					type: Boolean,
+					value: false
+				},
+				userId: {
+					type: Number,
+					value: 0,
+					notify: true,
+					observer: '_userIdChanged'
+				},
+				userEduPersonId: {
+					type: Number,
+					value: 0,
+					notify: true
+				},
+				userName: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRole: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userDisplayName: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userEmail: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userAvatarUrl: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRegistrationState: {
+					type: String,
+					value: '',
+					notify: true
+				},
+				userRoles: {
+					type: Array,
+					value: [],
+					notify: true
+				},
+				currentUserRoleId: {
+					type: Number,
+					value: 0,
+					notify: true
+				},
+				redirectTo: {
+					type: String,
+					value: null,
+					notify: true
+				},
+				requiredConsents: {
+					type: Object,
+					value: null,
+					notify: true
+				},
+				cookiePath: {
+					type: String,
+					value: '/'
+				},
+				_resetModeActive: {
+					type: Boolean,
+					value: false
+				},
+				_isUserRemembered: {
+					type: Boolean,
+					value: false
+				},
+				_rememberedUserName: {
+					type: String
+				},
+				_rememberedUserDisplayName: {
+					String: String
+				},
+				_rememberedUserEmail: {
+					type: String
+				},
+				_rememberedUserNameOrEmail: {
+					type: String
+				},
+				_userNameOrEmail: {
+					type: String,
+					value: ''
+				},
+				_rememberedUserAvatar: String,
+				_rememberedUserRoleId: Number,
+				_storedUserData: {
+					type: Array,
+					observer: '_storedUserDataChanged'
+				},
+				viewRegistration: {
+					type: Boolean,
+					value: false,
+					observer: '_viewRegistrationChanged'
+				},
+				language: {
+					type: String
+				},
+				_confirmResetPassowordButtonDisabled: {
+					type: Boolean,
+					computed: '_computeConfirmResetPassowordButtonDisabled(_isUserRemembered, _userNameOrEmail)'
+				}
+			},
+			attached: function () {
+				this.loadResources(this.resolveUrl('../../locales.json'));
+			},
+			observers: [
+				'_initPage(pageVisible, localize)'
+			],
+			_checkForSubmitByEnter: function (e) {
+				if (e.keyCode === 13) {
+
+					if (this._resetModeActive) {
+						this.$$('#confirmResetPassowordButton').click();
+					} else {
+						this.$.loginForm.submit();
+					}
+				}
+			},
+			_computePageTitle: function (resetModeActive, localize) {
+				if (resetModeActive) return localize('forgottenPasswordTitle');
+
+				return localize('pageTitleLogin');
+			},
+			_getCharacterImageURL: function (language) {
+				return 'images/character-login.' + language + '.png';
+			},
+			_viewRegistrationChanged: function (newVal, oldVal) {
+				if (newVal) {
+
+					if (this._appSettings && this._appSettings.useUserRegistration)
+						this.$.loginRegisterContainer.classList.add('tall');
+
+				} else {
+
+					if (this._appSettings && this._appSettings.useUserRegistration)
+						this.$.loginRegisterContainer.classList.remove('tall');
+				}
+			},
+			_toggleRegisterTapped: function (object) {
+				if (this.loginInProgress) return true;
+				if (this.$.resetPasswordRequest.loading) return true;
+
+				if (this.viewRegistration) {
+					window.history.back();
+				}
+				else {
+					page('/' + this.localize('pageRouteRegister'));
+				}
+			},
+			_processRiamLoginTap: function (e) {
+				this.$.indicateExternalProviderLoginProgress.open();
+			},
+			_validateResetForm: function () {
+				var userNameInput = this.$$('#userNameInput');
+				var passwordInput = this.$$('#passwordInput');
+
+				var userName = userNameInput.value;
+				var password = passwordInput.value;
+
+				// reset error messages
+				userNameInput.errorMessage = this.localize('errorMessageEnterUsername');
+				passwordInput.errorMessage = this.localize('errorMessageEnterPassword');
+
+				userNameInput.validate();
+				passwordInput.validate();
+
+				var allValid = true;
+
+				if (userNameInput.invalid) allValid = false;
+				if (passwordInput.invalid) allValid = false;
+
+				return allValid;
+			},
+			_onLoginFormPresubmit: function (event) {
+				event.preventDefault();
+
+				if (!this._validateResetForm()) return;
+
+				var userName = this.$$('#userNameInput').value;
+				var password = this.$$('#passwordInput').value;
+				var rememberMe = this.$$('#rememberMeCheckbox').checked;
+
+				this.$.login.loginUser(userName, password, rememberMe);
+			},
+			_onLoginButtonTapped: function () {
+				this.$.loginForm.submit();
+			},
+			_onResetPasswordButtonTapped: function () {
+				this.$$('#userNameInput').invalid = false;
+
+				this.$$('#userNameInput').focus();
+
+				this._resetModeActive = true;
+			},
+			_disableResetPasswordMode: function () {
+				this._resetModeActive = false;
+
+				this.$$('#userNameInput').invalid = false;
+				this.$$('#passwordInput').invalid = false;
+
+				this.$$('#userNameInput').focus();
+			},
+			_onConfirmResetPasswordButtonTapped: function () {
+				if (this.loginInProgress) return;
+
+				this.loginInProgress = true;
+				this.$.resetPasswordRequest.body = {
+					UserNameOrEmail: this.$$('#userNameInput').value,
+					IsEmail: false,
+					language: this.language
+				};
+				this.$.resetPasswordRequest.generateRequest();
+			},
+			_onLoggedIn: function (event, detail) {
+				fixZoomMobile();
+				this.$$('#passwordInput').value = '';
+
+				if (!this.$$('#rememberMeCheckbox').checked) {
+					this._clearRememberedUserData();
+				}
+				forceLoseFocus();
+			},
+			_onLoginError: function (event, detail) {
+				this.loginInProgress = false;
+				this.$$('#passwordInput').value = '';
+
+				var errorText = this.localize('failedToLogin');
+				var errors = detail.errors;
+
+				if (errors != null) {
+					if (errors.Unauthorized != null) {
+						this.$$('#passwordInput').errorMessage = this.localize('incorrectPasswordRepeat');
+						this.$$('#passwordInput').invalid = true;
+						return;
+					}
+					else if (errors.AccountIsBanned != null) {
+						errorText = this.localize('accountIsBanned');
+					}
+
+					//var errorKeys = Object.keys(response.errors);
+					//if (errorKeys != null && errorKeys.length > 0)  errorText = response.errors[errorKeys[0]];
+				}
+
+				this.fire('iron-signal', { name: 'error', data: errorText });
+			},
+			_closeLoginAndRedirect: function () {
+				var to = '/';
+				if (this.redirectTo != null && this.redirectTo != '') to = this.redirectTo;
+
+				this.async(function () {
+					page(to);
+                });
+			},
+			_initPage: function (pageVisible, localize) {
+				if (!pageVisible) return;
+				if (!localize) return;
+
+				this._resetModeActive = false;
+				this._deleteRegistrationCookies();
+
+				if (this.userId != null && this.userId > 0) {
+					this._closeLoginAndRedirect();
+				}
+
+				this.async(function () {
+					if (this._isUserRemembered) {
+						this.$$('#passwordInput').focus();
+					} else {
+
+						this.$$('#userNameInput').focus();
+					}
+				}, 100);
+			},
+			_userIdChanged: function (newVal, oldVal) {
+				// assume that positive userId means a logged-in user -> close login page
+				if (newVal != null && newVal > 0 && this.pageVisible) {
+					this._closeLoginAndRedirect();
+				}
+			},
+			_storedUserDataChanged: function (newVal, oldVal) {
+				this._loadRememberedUserData();
+
+				this.async(function () {
+					this.$$('#rememberMeCheckbox').checked = this._isUserRemembered;
+				});
+			},
+			_loadRememberedUserData: function () {
+				if (this._storedUserData != null && this._storedUserData.length > 0) {
+					var userData = this._storedUserData[0];
+					this._rememberedUserName = userData.userName;
+					this._rememberedUserDisplayName = userData.displayName;
+					this._rememberedUserEmail = userData.email;
+					this._rememberedUserAvatar = userData.avatarUrl;
+					this._rememberedUserRoleId = userData.roleId;
+					this._rememberedUserNameOrEmail = this._rememberedUserName != null && this._rememberedUserName != '' ? this._rememberedUserName : this._rememberedUserEmail;
+					this._isUserRemembered = true;
+				}
+				else {
+					this._isUserRemembered = false;
+				}
+			},
+			_clearRememberedUserData: function () {
+				this._storedUserData = [];
+				this._isUserRemembered = false;
+			},
+			_onClearRememberedUserButtonTapped: function () {
+				this._clearRememberedUserData();
+			},
+			_onResetPasswordRequestResponse: function (event, request) {
+				this.loginInProgress = false;
+
+				var response = event.detail.response;
+				if (response != null && response.isSuccess) {
+					this.fire('iron-signal', { name: 'info', data: this.localize('resetPasswordGuideSent') });
+
+					this._resetModeActive = false;
+				}
+			},
+			_onResetPasswordRequestError: function (event, detail) {
+				this.loginInProgress = false;
+
+				var errorText = this.localize('failedToSendPasswordResetInstructions');
+
+				var response = detail.request.xhr.response;
+				if (typeof response === 'string' || response instanceof String) response = JSON.parse(response);
+
+				if (response != null && response.errors != null) {
+					if (response.errors.UserNotFound != null) {
+						errorText = this.localize('failedToFindUserTryDifferentUserName');
+					} else if (response.errors.EmailDoesNotExist != null) {
+						errorText = this.localize('failedToFindUserEmail');
+					}
+					else if (response.errors.TooManyRequests != null) {
+						errorText = this.localize('confirmationEmailNotSentTooManyRequests', 'num', response.retryDuration);
+					}
+					//var errorKeys = Object.keys(response.errors);
+					//if (errorKeys != null && errorKeys.length > 0)  errorText = response.errors[errorKeys[0]];
+				}
+
+				this.fire('iron-signal', { name: 'error', data: errorText });
+			},
+			_navigateBack: function () {
+				window.history.back();
+			},
+			_computeConfirmResetPassowordButtonDisabled: function (_isUserRemembered, _userNameOrEmail) {
+				if (_isUserRemembered) return false;
+				return this._isWhitespaceOrEmpty(_isUserRemembered);
+			},
+			_computeRedirectUri: function (appRouteBase, localize) {
+				var redirectUri = window.location.protocol + '//' + window.location.host + appRouteBase + '/' + localize('pageRouteHome');
+				//var redirectUri = window.location.protocol + '//' + window.location.host + appRouteBase; // for intial 'back' hack in APP it is better to provide the root instead explicit home page url
+				return encodeURIComponent(redirectUri);
+			},
+			_isLoginSupported: function (login, settings) {
+				var supportedLogins = settings.supportedLogins;
+				if (supportedLogins != null && supportedLogins.length != null && supportedLogins.length > 0) {
+					for (var i = 0; i < supportedLogins.length; i++) {
+						if (supportedLogins[i] == login) return true;
+					}
+				}
+				return false;
+			},
+			_areSocialLoginProvidersSupported: function(settings) {
+				return (this._isLoginSupported('facebook', settings) || this._isLoginSupported('googleoauth', settings));
+			},
+			_deleteRegistrationCookies: function () {
+				deleteCookie('registrationRole', this.cookiePath);
+				deleteCookie('registrationSchoolEduId', this.cookiePath);
+				deleteCookie('registrationEmail', this.cookiePath);
+				deleteCookie('registrationMandatoryPDPAccepted', this.cookiePath);
+			},
+			_isWhitespaceOrEmpty: function (text) {
+				if (text == null) return true;
+				return !/[^\s]/.test(text);
+			},
+			_equals: function (x, y) {
+				return x == y;
+			},
+			_equalsAny: function (x, y1, y2) {
+				return x == y1 || x == y2;
+			}
+		});
+	</script>
+</dom-module>

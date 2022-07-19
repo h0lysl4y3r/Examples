@@ -1,0 +1,1328 @@
+﻿<link rel="import" href="../../bower_components/polymer/polymer.html" />
+<link rel="import" href="kozmix-player-transition.html" />
+
+<dom-module id="kozmix-player">
+	<template>
+		<style is="custom-style" include="shared-styles">
+
+			#playerContainer {
+				background-color: #eeeeee;
+				width: 100%;
+				height: 100%;
+			}
+
+			#playerContentWrapper {
+				padding: 0;
+				margin: 0 auto 0 auto;
+				position: relative;
+				min-height: 100%;
+			}
+
+			#playerContentWrapper:not(.ios) {
+				overflow: visible;
+				overflow-y: visible;
+				overflow-x: auto;
+			}
+
+			#playerContentWrapper iframe {
+				position: absolute;
+			}
+
+			iron-icon {
+				--iron-icon-height: 200px;
+				--iron-icon-width: 200px;
+				--iron-icon-fill-color: #c6c6c6;
+				margin-bottom: 20px;
+			}
+
+			paper-button {
+				margin-top: 40px;
+			}
+
+			kozmix-toolbar {
+				--paper-scroll-header-container: {
+					background-color: #EEEEEE;
+				};
+			}
+
+			kozmix-player-transition {
+				pointer-events: none;
+			}
+
+			#submitScreen {
+				text-align: center;
+				max-width: 520px;
+				margin-left: auto;
+				margin-right: auto;
+				padding-left: 16px;
+				padding-right: 16px;
+				line-height: 1.35rem;
+			}
+
+			#submitScreen h3 {
+				font-size: 1.25rem;
+				font-weight: normal;
+			}
+
+			#submitScreen iron-image {
+				margin-top: 40px;
+				margin-left: 170px;
+			}
+
+			#submitScreen iron-image[src=''] {
+				max-height: 200px;
+			}
+
+			@media only screen and (max-width: 600px) {
+				#submitScreen iron-image {
+					margin-left: 0;
+				}
+			}
+
+			@media only screen and (max-width: 400px) {
+				#submitScreen iron-image {
+					width: 280px !important;
+					height: 270px !important;
+				}
+			}
+
+			@media only screen and (max-height: 800px) {
+				#submitScreen iron-image {
+					height: 270px !important;
+				}
+			}
+
+			@media only screen and (max-height: 600px) {
+				#submitScreen iron-image {
+					display: none;
+				}
+
+				h3 {
+					margin-top: 60px;
+				}
+			}
+		</style>
+
+
+		<iron-ajax id="resourceRequest" url="[[webApiUrl]]/content/resource/[[_resourceUUID]]" handle-as="json" with-credentials="true" on-response="_onResourceRequestResponse" on-error="_onResourceRequestError" loading="{{_resourceRequestLoading}}"></iron-ajax>
+		<iron-ajax id="assignmentResourceResultRequest" url="[[webApiUrl]]/content/assignments/[[_assignment.id]]/assignee-results/[[_assigneeResultId]]/resource-results/[[_resource.uuid]]" method="GET" handle-as="json" content-type="application/json" with-credentials="true" on-response="_onAssignmentResourceResultRequestResponse" on-error="_onAssignmentResourceResultRequestError" loading="{{_assignmentResourceResultRequestLoading}}"></iron-ajax>
+		<iron-ajax id="updateAssignmentResourceResultRequest" url="[[webApiUrl]]/content/assignments/[[_assignment.id]]/assignee-results/[[_assigneeResultId]]/resource-results/[[_resource.uuid]]" method="PUT" handle-as="json" content-type="application/json" with-credentials="true" on-response="_onUpdateAssignmentResourceResultRequestResponse" on-error="_onUpdateAssignmentResourceResultRequestError" loading="{{_updateAssignmentResourceResultRequestLoading}}"></iron-ajax>
+		<iron-ajax id="resourceResultRequest" url="[[webApiUrl]]/content/assignees/resource-results/[[_resource.uuid]]" method="GET" handle-as="json" content-type="application/json" with-credentials="true" on-response="_onAssignmentResourceResultRequestResponse" on-error="_onAssignmentResourceResultRequestError" loading="{{_resourceResultRequestLoading}}"></iron-ajax>
+		<iron-ajax id="updateResourceResultRequest" url="[[webApiUrl]]/content/assignees/resource-results/[[_resource.uuid]]" method="PUT" handle-as="json" content-type="application/json" with-credentials="true" on-response="_onUpdateAssignmentResourceResultRequestResponse" on-error="_onUpdateAssignmentResourceResultRequestError" loading="{{_updateResourceResultRequestLoading}}"></iron-ajax>
+
+		<iron-media-query query="(max-width: 1200px)" query-matches="{{_isMobile}}"></iron-media-query>
+
+		<kozmix-app-proxy id="appProxy" browser="{{_browser}}" bind-all user-edu-person-id="{{_userEduPersonId}}" app-u-i="{{_appUI}}"></kozmix-app-proxy>
+
+		<template is="dom-if" if="[[playerActive]]">
+			<kozmix-toolbar id="toolbar" web-api-url="[[webApiUrl]]" page-title="[[pageTitle]]" title-link="[[titleLink]]" crumbs="[[_computeResourceCrumbs(crumbs, _resource)]]"
+							progress-bar-disabled="[[!_or(_resourceRequestLoading, _assignmentResourceResultRequestLoading, _updateAssignmentResourceResultRequestLoading, _resourceResultRequestLoading, _updateResourceResultRequestLoading)]]"
+							view-mode="resource-player" on-show-resource-metadata-tapped="_onShowResourceMetadata"
+							on-add-resource-to-lesson-tapped="_onAddResourceToLesson"
+							on-fullscreen-tapped="_onShowFullscreen"
+							item-index="[[_getItemIndex(_resource, _assignmentResources, _doShowSubmitScreen)]]" item-total="[[_assignmentResources.length]]"
+							on-item-navigate-previous="_onItemNavigatePrevious" on-item-navigate-next="_onItemNavigateNext"
+							on-back-navigation="_onBackNavigation" use-back-navigation
+							assignee-result="[[_assigneeResult]]" resource-result="[[_resourceResult]]"
+							finish-resource-button-text-key="[[finishResourceKey]]" language="[[language]]">
+
+				<template is="dom-if" if="[[_noAccessToResource]]">
+					<kozmix-access-denied title="[[localize('tooltipNoAccessToResource')]]" language="[[language]]"></kozmix-access-denied>
+				</template>
+
+				<div id="playerContainer" fullscreen-content>
+					<div id="playerContentWrapper" class$="[[_browser.name]]">
+						<template is="dom-if" if="[[_isSubmitScreenVisible(_doShowSubmitScreen, _resource)]]">
+							<div id="submitScreen">
+								<iron-image src$="[[_getCharacterImageURLSubmitScreen(language, _appUI)]]" sizing="contain" width="360" height="370" alt=""></iron-image>
+								<h3>[[localize('assignmentsSubmitScreenTitle')]]</h3>
+								<p>[[localize('assignmentsSubmitScreenInfo')]]</p>
+								<div><paper-button raised on-tap="_onSubmitAssignmentTapped" style="margin-top: 30px;">[[localize('submitAssignmentResolution')]]</paper-button></div>
+								<div><paper-button class="solo-text" on-tap="_onBackTapped" style="margin-top: 20px;">[[localize('assignmentsSubmitScreenBack')]]</paper-button></div>
+							</div>
+						</template>
+					</div>
+				</div>
+			</kozmix-toolbar>
+
+			<kozmix-player-transition id="transition" player-active="[[playerActive]]" loading-resource-state="[[_loadingResourceState]]" saving-resource-result-state="[[_savingResourceResultState]]" loading-resource-result-state="[[_loadingResourceResultState]]" language="[[language]]" app-u-i="[[_appUI]]"></kozmix-player-transition>
+		</template>
+
+		<kozmix-resource-metadata id="resourceMetadata" on-close-resource-metadata="_onCloseResourceMetadata" web-api-url="[[webApiUrl]]" language="[[language]]"></kozmix-resource-metadata>
+	</template>
+	<script>
+		Polymer({
+			is: 'kozmix-player',
+			properties: {
+				// Application Web API URL for the gateway service. Set by host.
+				webApiUrl: {
+					type: String
+				},
+				playerActive: {
+					type: Boolean,
+					notify: true,
+					readOnly: true,
+					value: false
+				},
+				crumbs: {
+					type: Array,
+					notify: true,
+					value: []
+				},
+				pageTitle: {
+					type: String,
+					value: ''
+				},
+				titleLink: {
+					type: String,
+					value: ''
+				},
+				// stops the player on back navigation
+				autostop: {
+					type: Boolean,
+					value: true
+				},
+				language: {
+					type: String
+				},
+				iframeMetadata: {
+					type: Object
+                },
+                finishResourceKey: {
+                    type: String,
+                    value: 'tooltipFinishResource'
+                },
+				_isMobile: {
+					type: Boolean
+				},
+				_resourceUUID: {
+					type: String,
+					value: ''
+				},
+				_resource: {
+					type: Object,
+					value: null,
+					observer: "_resourceChanged"
+				},
+				_assignment: {
+					type: Object,
+					value: null,
+				},
+				_assignmentResources: {
+					type: Array,
+					value: [],
+				},
+				_doStoreResults: {
+					type: Boolean,
+					value: false
+                },
+                _useScormData: {
+                    type: Boolean,
+                    value: false
+                },
+                // `resource-player`, `assignment-player`
+				_viewMode: {
+					type: String,
+					value: ''
+				},
+				_userEduPersonId: {
+					type: Number,
+					value: 0
+				},
+				_assigneeResult: {
+					type: Object,
+					value: null
+				},
+				_assigneeResultId: {
+					type: Number,
+					computed: '_computeAssigneeResultId(_assignment, _assigneeResult)'
+				},
+				_resourceResult: {
+					type: Object,
+					value: null
+				},
+				_noAccessToResource: {
+					type: Boolean,
+					value: false,
+				},
+				_rawScore: {
+					type: Number,
+					value: 0
+				},
+				_maxScore: {
+					type: Number,
+					value: 0
+				},
+				_sessionTime: {
+					type: String,
+					value: '00:00:00'
+				},
+				_sessionTimeDelta: {
+					type: Number,
+					value: 0
+				},
+				_scormData: {
+					type: String,
+					value: ''
+				},
+				_hints: {
+					type: Number,
+					value: 0
+				},
+				_mistakes: {
+					type: Number,
+					value: 0
+				},
+				_attempts: {
+					type: Number,
+					value: 0
+				},
+				_isFullscreenPlayer: {
+					type: Boolean,
+					value: false
+				},
+				_isFullscreenContent: {
+					type: Boolean,
+					value: false
+				},
+				_nestedFullscreenSupported: {
+					type: Boolean,
+					computed: '_computeNestedFullscreenSupported(_browser)'
+				},
+				_resourceRequestLoading: {
+					type: Boolean,
+					value: false
+				},
+				_assignmentResourceResultRequestLoading: {
+					type: Boolean,
+					value: false
+				},
+				_updateAssignmentResourceResultRequestLoading: {
+					type: Boolean,
+					value: false
+				},
+				_resourceResultRequestLoading: {
+					type: Boolean,
+					value: false
+				},
+				_updateResourceResultRequestLoading: {
+					type: Boolean,
+					value: false
+				},
+				// Resource loading state. If `null` or empty string, then loading is not in progress.
+				// If the state is `requesting`, the resource details are requested from the server,
+				// value `fails` means that the resource was not loaded from the server.
+				_loadingResourceState: {
+					type: String,
+					value: ''
+				},
+				// Resource's result saving state. If `null` or empty string, then saving is not in progress.
+				// If the state is `waiting`, the content termination started, value `collecting` means that some data was collected from the content,
+				// `submitting` means that results are sent to server and `fails` means that the resource was not saved to the server.
+				_savingResourceResultState: {
+					type: String,
+					value: ''
+				},
+				// Resource's result loading state. If `null` or empty string, then loading is not in progress.
+				// If the state is `requesting`, the resource results are requested from the server,
+				// value `fails` means that the resource was not loaded from the server.
+				_loadingResourceResultState: {
+					type: String,
+					value: ''
+				},
+				_emitIFrameTime: {
+					type: Date,
+					value: null
+				},
+				_upkeepFrameHeight: {
+					type: Number,
+					value: 0
+				},
+				_doShowSubmitScreen: {
+					type: Boolean
+				}
+			},
+			observers: [
+				'_ensureView(playerActive, _resource)'
+			],
+			behaviors: [
+				Polymer.IronResizableBehavior,
+				Polymer.AppLocalizeBehavior
+			],
+			listeners: {
+				'iron-resize': '_onIronResize'
+			},
+			attached: function () {
+				this.loadResources(this.resolveUrl('../../locales.json'));
+				this._upkeep();
+
+				this._onMessageReceivedBound = this._onMessageReceived.bind(this);
+				window.addEventListener("message", this._onMessageReceivedBound, false);
+			},
+			detached: function () {
+				window.removeEventListener("message", this._onMessageReceivedBound, false);
+				this._onMessageReceivedBound = null;
+			},
+			_onMessageReceived: function (e) {
+				if (e.data === 'updateLessonMetadata') {
+					if (this.iframeMetadata) {
+						var frame = this.$$('#playerIFrame');
+						frame.contentWindow.postMessage(JSON.stringify(this.iframeMetadata), '*');
+					}
+				}
+			},
+			startPlayResource: function (resourceOrUUID, doStoreResults, useScormData) {
+				// resource must be provided
+				if (resourceOrUUID == null) return false;
+
+				// defaults
+				if (doStoreResults === undefined) doStoreResults = true;
+				if (useScormData == undefined) useScormData = true;
+
+				if (this._isStillSaving()) {
+					this.debounce('player_startPlayResource', function () {
+						this.startPlayResource(resourceOrUUID, doStoreResults, useScormData);
+					}, 200);
+				}
+				else {
+					this._startPlayResourceInner(resourceOrUUID, doStoreResults, useScormData);
+				}
+
+				return true;
+			},
+			_startPlayResourceInner: function (resourceOrUUID, doStoreResults, useScormData) {
+				this._assignment = null;
+				this._assignmentResources = null;
+				this._doStoreResults = doStoreResults;
+				this._useScormData = useScormData;
+				this._assigneeResult = null;
+
+				this._resourceResult = null;
+				this._resource = null;
+
+				this._doShowSubmitScreen = false;
+
+				this.stop();
+
+				this._playResourceInner(resourceOrUUID, 'resource-player');
+			},
+			startPlayAssignment: function (assignment, assignmentResources, resourceToStart, doStoreResults, assigneeResult) {
+				// assignment and resources must be provided
+				if (assignment == null) return;
+				if (assignmentResources == null || assignmentResources.length == undefined || assignmentResources.length <= 0) return false;
+
+				// defaults
+				if (resourceToStart != null) {
+					if (assignmentResources.indexOf(resourceToStart) < 0) return false;
+				}
+				else {
+					resourceToStart = assignmentResources[0];
+				}
+
+				if (assignment == undefined) assignment = null;
+				if (assigneeResult == undefined) assigneeResult = null;
+
+				if (this._isStillSaving()) {
+					this.debounce('player_startPlayAssignment', function () {
+						this.startPlayAssignment(assignment, assignmentResources, resourceToStart, doStoreResults, assigneeResult);
+					}, 200);
+				}
+				else {
+					this._startPlayAssignmentInner(assignment, assignmentResources, resourceToStart, doStoreResults, assigneeResult);
+				}
+
+				return true;
+			},
+			_startPlayAssignmentInner: function (assignment, assignmentResources, resourceToStart, doStoreResults, assigneeResult) {
+				this._assignment = assignment;
+				this._assignmentResources = assignmentResources;
+				this._doStoreResults = doStoreResults;
+				this._useScormData = true;
+				this._assigneeResult = assigneeResult;
+
+				this._resourceResult = null;
+				this._resource = null;
+
+				this._doShowSubmitScreen = false;
+
+				this.stop();
+
+				// assumption: submit view mode is equal to storing results
+				if (doStoreResults) {
+					this._playResourceInner(resourceToStart, 'assignment-player-submit');
+				}
+				else {
+					this._playResourceInner(resourceToStart, 'assignment-player');
+				}
+			},
+			_playResourceInner: function (resourceOrUUID, viewMode) {
+				this.fire('iron-signal', { name: 'activate-fullwidth' });
+
+				fixZoomMobile();
+
+				this._registerEventListeners();
+
+				this._viewMode = viewMode;
+				this._setPlayerActive(true);
+				this._setToolbarViewMode(viewMode);
+
+				this.debounce('player_transitionToResource', function () {
+					//this.$$('#backFab').disabled = false;
+					this._transitionToResourceStart(resourceOrUUID, true); // needs time to instanciate and attach
+				}, 60);
+			},
+			_setToolbarViewMode: function (viewMode) {
+				var toolbar = this.$$('#toolbar');
+				if (toolbar == null) {
+					this.async(function () { this._setToolbarViewMode(viewMode); });
+				}
+				else {
+					if (toolbar.viewMode != viewMode) toolbar.viewMode = viewMode;
+				}
+			},
+			_isStillSaving: function () {
+				// Player can navigate through resources within an assignment with the transition logic that ensures correct saving and loading.
+				// But to support singleton pattern we need to manage to finish saving of previous closed resource and wait with the start of the new.
+
+				if (this.isDebouncerActive('player_updateResourceResult')) return true;
+				if (this.isDebouncerActive('player_saveResourceResultCollectAndSubmit')) return true;
+
+				var srrs = this._savingResourceResultState;
+				if (srrs == 'waiting' || srrs == 'collecting'|| srrs == 'submitting') return true;
+				if (this._updateAssignmentResourceResultRequestLoading) return true;
+				if (this._updateResourceResultRequestLoading) return true;
+
+				return false;
+			},
+			stop: function () {
+				this._stopInner(true);
+			},
+			_stopInner: function (deactivateFullWidth) {
+				if (this.isDebouncerActive('player_transitionToResource')) this.cancelDebouncer('player_transitionToResource');
+				if (this.isDebouncerActive('player_emitIFrameForResource')) this.cancelDebouncer('player_emitIFrameForResource');
+
+				this._abortRequest(this.$.resourceRequest);
+				this._abortRequest(this.$.assignmentResourceResultRequest);
+				this._abortRequest(this.$.resourceResultRequest);
+
+				// NOTE: don't stop the following: saving should run on background. Waited out on new startPlay.
+				//if (this.isDebouncerActive('player_updateResourceResult')) this.cancelDebouncer('player_updateResourceResult');
+				//if (this.isDebouncerActive('player_saveResourceResultCollectAndSubmit')) this.cancelDebouncer('player_saveResourceResultCollectAndSubmit');
+				//this._abortRequest(this.$.updateAssignmentResourceResultRequest);
+				//this._abortRequest(this.$.updateResourceResultRequest);
+
+				this._transitionStop();
+
+				if (this.playerActive) {
+					this._deleteIFrame();
+
+					if (deactivateFullWidth) this.fire('iron-signal', { name: 'deactivate-fullwidth' });
+					this._setPlayerActive(false);
+					fixZoomMobile();
+					this.debounce('player_unregisterEventListeners', function () {
+						this._unregisterEventListeners();
+						this._upkeepFrameHeight = 0;
+					}, 100);
+				}
+			},
+			_onBackNavigation: function () {
+				if (this.autostop) {
+					this._stopInner(false);
+				}
+				else {
+					// ## Autostop is always true. Consider to remove this code.
+					this.async(function () { fixZoomMobile(); }, 100);
+				}
+			},
+			_onBackTapped: function () {
+				this.async(function () { fixZoomMobile(); }, 100);
+				//this.$$('#backFab').disabled = true;
+				window.history.back();
+			},
+			_onFullScreenChange: function (e) {
+				var fullscreenElement = document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+
+				playerFullscreenElement = this.$$("[fullscreen-content]");
+				contentFullscreenElement = this.$$("#playerIFrame");
+
+				var allowContentFullscreen = true;
+
+				if (fullscreenElement == playerFullscreenElement) {
+					this._isFullscreenPlayer = true;
+					this._isFullscreenContent = false;
+					this.async(this._rescaleIFrame, 200);
+
+					allowContentFullscreen = this._nestedFullscreenSupported;
+				}
+				else if (fullscreenElement == contentFullscreenElement) {
+					this._isFullscreenContent = true;
+					this.async(this._rescaleIFrame, 200);
+				}
+				else {
+					if (this._isFullscreenContent && this._isFullscreenPlayer) {
+						this._isFullscreenPlayer = false;
+						this._isFullscreenContent = false;
+					}
+					else {
+						this._isFullscreenPlayer = false;
+						this._isFullscreenContent = false;
+					}
+					this.async(this._rescaleIFrame, 200);
+				}
+
+				if (allowContentFullscreen) {
+					contentFullscreenElement.setAttribute('allowfullscreen', '');
+				}
+				else {
+					contentFullscreenElement.removeAttribute('allowfullscreen');
+				}
+			},
+			_registerEventListeners: function () {
+				this.listen(window, 'message', '_onIFrameReceiveMessage');
+				this.listen(document, 'webkitfullscreenchange', '_onFullScreenChange');
+				this.listen(document, 'mozfullscreenchange', '_onFullScreenChange');
+				this.listen(document, 'fullscreenchange', '_onFullScreenChange');
+			},
+			_unregisterEventListeners: function () {
+				this.unlisten(window, 'message', '_onIFrameReceiveMessage');
+				this.unlisten(document, 'webkitfullscreenchange', '_onFullScreenChange');
+				this.unlisten(document, 'mozfullscreenchange', '_onFullScreenChange');
+				this.unlisten(document, 'fullscreenchange', '_onFullScreenChange');
+			},
+			_deleteIFrame: function () {
+				var removed = false;
+
+				// remove multiple instances, if present - should not happen though
+				for (var i = 0; i < 5; i++) {
+					var frame = this.$$("#playerIFrame");
+					if (frame == null) break;
+
+					this._saveResourceResultStart();
+					var playerContentWrapper = this.$$('#playerContentWrapper');
+					Polymer.dom(playerContentWrapper).removeChild(frame);
+					removed = true;
+				}
+
+				return removed;
+			},
+			_emitIFrameForResource: function (resource) {
+				var playerContentWrapper = this.$$('#playerContentWrapper');
+
+				if (playerContentWrapper == null || this.$.assignmentResourceResultRequest.loading || this.$.resourceResultRequest.loading || this._loadingResourceResultState != '') {
+					this.debounce('player_emitIFrameForResource', function () {
+						this._emitIFrameForResource(resource);
+					}, 60);
+					return;
+				}
+
+				var isWidthAuto = (resource.width == 'auto');
+				var isHeightAuto = (resource.height == 'auto');
+
+				var resourceWidth = (resource.width == null) ? '1024px' : (isWidthAuto ? '100%' : (resource.width + 'px'));
+				var resourceHeight = (resource.height == null) ? '768px' : (isHeightAuto ? '100%' : (resource.height + 'px'));
+
+				//playerContentWrapper.style.maxWidth = (isWidthAuto ? 'none' : resourceWidth);
+				//playerContentWrapper.style.maxHeight = (isHeightAuto ? 'none' : resourceHeight);
+
+				var fit = (isHeightAuto ? 'fixedHorizontal' : 'fixed');
+				if (isWidthAuto) fit = (isHeightAuto ? 'fill' : 'fixedVertical');
+
+				var iframe = document.createElement("IFRAME");
+				iframe.id = "playerIFrame";
+				iframe.src = resource.url;
+				iframe.width = resourceWidth;
+				iframe.height = resourceHeight;
+				iframe.frameBorder = 0;
+				iframe.allowfullscreen = true;
+				iframe.setAttribute('allowfullscreen', '');
+				iframe.setAttribute('allow', 'autoplay; fullscreen; camera; microphone; encrypted-media; accelerometer; gyroscope; picture-in-picture');
+				iframe.setAttribute('fit', fit);
+				//iframe.setAttribute('scrolling', (fit == 'fixed') ? 'no' : 'auto');
+				iframe.setAttribute('scrolling', (fit == 'fill') ? 'auto' : 'no');
+
+				if (this._browser.name == 'ios' && resourceHeight == '100%') {
+					iframe.style.cssText = 'height: 1px !important; min-height: 100%;';
+					iframe.setAttribute('scrolling', 'auto');
+				}
+
+				var player = this;
+				var lmsFinished = false;
+
+				var api_scorm_12 = {
+					LMSInitialize: function (noparam) {
+						return "true";
+					},
+					LMSFinish: function (noparam) {
+						lmsFinished = true;
+						if (player.isDebouncerActive('player_saveResourceResultCollectAndSubmit')) {
+							player.cancelDebouncer('player_saveResourceResultCollectAndSubmit');
+						}
+						player._saveResourceResultCollectAndSubmit();
+						return "true";
+					},
+					LMSGetValue: function (element) {
+						var value = 0;
+						if (element == 'cmi.suspend_data') {
+							if (player._resourceResult != null && player._useScormData) {
+								value = player._resourceResult.scormData;
+							}
+						}
+						return value;
+					},
+					LMSSetValue: function (element, value) {
+                        if (element == 'cmi.suspend_data') {
+                            if (player._useScormData) player._scormData = value;
+						}
+						else if (element == 'cmi.core.score.max') {
+							player._maxScore = value;
+						}
+						else if (element == 'cmi.core.score.raw') {
+							player._rawScore = value;
+						}
+						else if (element == 'cmi.core.session_time') {
+							player._sessionTimeDelta = hmsToSeconds(value);
+						}
+						else if (element == 'ydp.hints') {
+							player._hints = value;
+						}
+						else if (element == 'ydp.mistakes') {
+							player._mistakes = value;
+						}
+					},
+					LMSCommit: function (noparam) {
+						if (lmsFinished) return "false";
+
+						// wait for other commits or finish
+						player.debounce('player_saveResourceResultCollectAndSubmit', function () {
+							player._saveResourceResultCollectAndSubmit();
+						}, 1000);
+
+                        return "true";
+					},
+					LMSGetLastError: function(noparam) {
+						var errorCode = 0;
+						return errorCode;
+					},
+					LMSGetErrorString: function(errorCode) {
+						var errorDescription = '';
+						return errorDescription;
+					},
+					LMSGetDiagnostic: function(errorCode) {
+						var errorDetailedInformation = '';
+						return errorDetailedInformation;
+					},
+				}
+				window.API = api_scorm_12;
+
+				Polymer.dom(playerContentWrapper).appendChild(iframe);
+
+				this._emitIFrameTime = new Date();
+
+				this._rescaleIFrame(iframe);
+
+				iframe.focus();
+			},
+			_onIFrameReceiveMessage: function (event) {
+				var data = event.data;
+				var message = null;
+
+				try {
+					message = JSON.parse(data);
+				} catch (e) {
+					message = null;
+				}
+
+				if (message != null && (message.lorepo === true || message.empiria === true)) {
+					// specific Lorepo (IC Player) or Empiria wrapper message
+					var frame = this.$$('#playerIFrame');
+					if (frame != null && message.resize != null) {
+						var fit = frame.getAttribute('fit');
+						if ((fit == 'fixedHorizontal' || fit == 'fixed') && message.resize.height != null) {
+							frame.height = message.resize.height;
+							frame.style.height = message.resize.height; // reset potentional iOS hack for resource 'auto' height
+						}
+						else if ((fit == 'fixedVertical' || fit == 'fixed') && message.resize.width != null) {
+							frame.width = message.resize.width;
+						}
+
+						//console.log('RESIZE MESSAGE', message);
+						// This is a hack for the Safari resizing iframes to zero height in some cases - resets the scrollbar to top
+						if (this._browser != null && this._browser.name == 'ios' && message.resize.height != null && (fit == 'fixedHorizontal' || fit == 'fill')) {
+							//console.log('iOS min-height hack', message.resize.height);
+							//frame.style.setProperty('min-height', message.resize.height + 'px');
+							frame.style.setProperty('min-height', message.resize.height);
+						}
+					}
+					else if (message.results != null) {
+						this._hints = message.results.checks;
+						this._mistakes = message.results.mistakes;
+					}
+				}
+			},
+			_computeResourceCrumbs: function (crumbs, resource) {
+				var newCrumbs = [];
+				var boolAddResourceCrumb = false;
+
+				for (var i = 0; i < crumbs.length; i++) {
+					var crumb = crumbs[i];
+
+
+					if (resource != null && (i == crumbs.length-1)) { // last crumb
+						if (crumb.link != 'javascript:void(0);') {
+							boolAddResourceCrumb = true;
+						}
+						else {
+							if (crumb.label != resource.title) crumb.label = resource.title;
+						}
+					}
+					newCrumbs.push(crumb);
+				}
+
+				if (boolAddResourceCrumb) {
+					newCrumbs.push({ label: resource.title, link: 'javascript:void(0);' });
+				}
+
+				return newCrumbs;
+			},
+			_onShowResourceMetadata: function () {
+				this.$.resourceMetadata.resource = this._resource;
+				this.$.resourceMetadata.open();
+			},
+			_onCloseResourceMetadata: function () {
+				this.$.resourceMetadata.close();
+			},
+			_onAddResourceToLesson: function () {
+			},
+			_onShowFullscreen: function () {
+				playerFullscreenElement = this.$$("[fullscreen-content]");
+				if (playerFullscreenElement != null) showFullscreenElement(playerFullscreenElement);
+			},
+			_resourceChanged: function (newVal, oldVal) {
+				var resource = newVal;
+				if (resource != null) {
+					this._noAccessToResource = (resource.isAccessible == null || resource.isAccessible == false);
+
+					this._sessionTime = '00:00:00';
+					this._sessionTimeDelta = 0;
+                    this._hints = 0;
+                    this._mistakes = 0;
+                    this._rawScore = 0;
+                    this._maxScore = 0;
+                    this._scormData = null;
+                    this._attempts = 0;
+
+                    var doLoadResourceResults =
+                        (this._assigneeResultId != null && this._assigneeResultId > 0) ||
+                        (this._viewMode == 'resource-player' && this._userEduPersonId > 0);
+
+					if (doLoadResourceResults) {
+						this._loadResourceResultStart();
+					}
+                    else {
+                        this._setResourceResultUnsubmitted();
+						this._transitionEnd();
+					}
+				}
+				else {
+					this._noAccessToResource = false;
+					this._transitionEnd();
+				}
+			},
+			_updateResourceResult: function () {
+				var doSaveResourceResult = this._doStoreResults &&
+					((this._assigneeResultId != null && this._assigneeResultId > 0) ||
+					(this._viewMode == 'resource-player' && this._userEduPersonId > 0));
+
+				if (doSaveResourceResult) {
+					this._savingResourceResultState = 'collecting';
+					// already loaded resources ?
+					if (!this.$.assignmentResourceResultRequest.loading && !this.$.resourceResultRequest.loading) {
+						// data could still flow in, like message - wait
+						this.debounce('player_updateResourceResult', function () {
+							this._updateResourceResultInner();
+						}, 60);
+					}
+				}
+				else {
+					this._savingResourceResultState = '';
+				}
+			},
+			_updateResourceResultInner: function () {
+				this._savingResourceResultState = 'submitting';
+
+				var score = 0;
+				if (this._maxScore > 0) {
+					score = (this._rawScore / this._maxScore) * 100;
+					score = Math.round(score);
+				}
+
+				var sessionTime = this._sessionTime;
+				if (this._sessionTimeDelta > 0) {
+					var sessionSeconds = hmsToSeconds(sessionTime);
+					sessionSeconds += this._sessionTimeDelta;
+					sessionTime = secondsToHMS(sessionSeconds);
+				}
+
+				var body = {
+					score: score,
+					sessionTime: sessionTime,
+					hints: this._hints,
+					mistakes: this._mistakes,
+					attempts: this._attempts,
+					scormData: this._scormData
+				};
+
+				if (this._assigneeResultId != null && this._assigneeResultId > 0) {
+					this.$.updateAssignmentResourceResultRequest.body = body;
+					var request = this.$.updateAssignmentResourceResultRequest.generateRequest();
+					this._signalUpdatingAssignmentsResourceResult(request.completes);
+				}
+				else {
+					this.$.updateResourceResultRequest.body = body;
+					var request = this.$.updateResourceResultRequest.generateRequest();
+				}
+			},
+			_onUpdateAssignmentResourceResultRequestResponse: function (event, detail) {
+				if (detail.response == null || !detail.response.isSuccess) {
+					this._savingResourceResultState = 'failed';
+					if (detail.request.aborted) return;
+					this._signalSavingError();
+				}
+				else {
+					this._savingResourceResultState = '';
+					this.fire('iron-signal', { name: 'update-assignments-resource-results-data', data: this.assignmentId });
+				}
+			},
+			_handleAssignmentResourceResultRequestError: function (detail) {
+				var response = detail.request.xhr.response;
+				if (typeof response === 'string' || response instanceof String) response = JSON.parse(response);
+				if (response == null || response.errors == null) return false;
+
+				if (response.statusCode == '400' && response.errors.AssignmentDeadlineExpired != null) {
+					this.fire('iron-signal', { name: 'error', data: this.localize('assignmentDeadlineExpired') });
+					this._trackAndLogSavingError('deadline');
+					return true;
+				}
+
+				return false;
+			},
+			_onUpdateAssignmentResourceResultRequestError: function (event, detail) {
+				if (this._handleAssignmentResourceResultRequestError(detail)) {
+					this._savingResourceResultState = '';
+				}
+				else {
+					this._savingResourceResultState = 'failed';
+					if (detail.request.aborted) return;
+					this._signalSavingError();
+				}
+			},
+			_onAssignmentResourceResultRequestResponse: function (event, detail) {
+				if (detail.response == null || !detail.response.isSuccess) {
+					this._loadingResourceResultState = 'failed';
+					this._setResourceResultUnsubmitted();
+					if (detail.request.aborted) return;
+					this._signalLoadingError();
+				}
+				else {
+					this._loadingResourceResultState = '';
+					if (detail.response.data != null) {
+						this._setResourceResultFromData(detail.response.data);
+					}
+					else {
+						this._setResourceResultUnsubmitted();
+					}
+				}
+			},
+			_onAssignmentResourceResultRequestError: function (event, detail) {
+				if (detail.request.aborted) return;
+
+				this._loadingResourceResultState = 'failed';
+
+				this._setResourceResultUnsubmitted();
+				if (detail.request == null || detail.request.xhr == null || detail.request.xhr.status != 400) {
+					this._signalLoadingError();
+				}
+			},
+			_setResourceResultUnsubmitted: function () {
+				this._setResourceResultFromData({
+					sessionTime: 0,
+					score: 0,
+					isSubmitted: false,
+					isSuccess: false,
+					attempts: 0
+				});
+			},
+			_setResourceResultFromData: function (data) {
+				this._resourceResult = data;
+
+				if (this._resourceResult.sessionTime != null) {
+					this._sessionTime = secondsToHMS(this._resourceResult.sessionTime);
+				}
+				else {
+					this._sessionTime = '00:00:00';
+				}
+				this._sessionTimeDelta = 0;
+
+				if (this._resourceResult.attempts != null) {
+					this._attempts = this._resourceResult.attempts;
+				}
+				else {
+					this._attempts = 0;
+                }
+
+                this._attempts++; // set a new attempt as result of the load - moved from save on finish
+			},
+			_onResourceRequestError: function () {
+				this._loadingResourceState = 'failed';
+				this._signalDataRequestError();
+			},
+			_onResourceRequestResponse: function (element, object) {
+				if (object.response.isSuccess) {
+					this._loadingResourceState = '';
+					this._resource = object.response.data;
+				}
+				else {
+					this._loadingResourceState = 'failed';
+					this._resource = null;
+					if (detail.request.aborted) return;
+					this._signalDataRequestError();
+				}
+			},
+			_onIronResize: function (event, detail) {
+				this._rescaleIFrame();
+			},
+			_rescaleIFrame: function (frame) {
+				if (frame == null) frame = this.$$('#playerIFrame');
+				if (frame == null) return;
+
+				var fit = frame.getAttribute('fit');
+
+				var transformValue = (this._isFullscreenContent || fit == 'fixedHorizontal' || fit == 'fill') ? 'translate(0px, 0px) scale(1)' : 'translate(0px, 40px) scale(1)';
+				var transformOriginValue = 'left top';
+
+				if (!this._isFullscreenContent) {
+
+					var container = frame.parentElement;
+					if (container.clientWidth == 0 || container.clientHeight == 0) {
+						this.async(this._rescaleIFrame, 200);
+						return;
+					}
+					var screenResolution = getSceenResolution(this._browser);
+
+					var containerWidth = (this._isFullscreenPlayer) ? screenResolution.width : container.clientWidth;
+					var contentWidth = parseInt(frame.width);
+					var contentWidthPadding = contentWidth + ((this._isFullscreenPlayer) ? 0 : 0);
+
+					var containerHeight = (this._isFullscreenPlayer) ? screenResolution.height : container.clientHeight;
+					var contentHeight = parseInt(frame.height);
+					var contentHeightPadding = contentHeight + (((this._isFullscreenPlayer)) ? 0 : 40);
+
+
+					//(this._isFullscreenPlayer || (containerWidth < contentWidthPadding) || (containerHeight < contentHeightPadding))
+					if (true) {
+
+						var scaleFactorX = containerWidth / contentWidthPadding;
+						var scaleFactorY = containerHeight / contentHeightPadding;
+						if (fit == 'fixedVertical' || fit == 'fill') scaleFactorX = 1.0;
+						if (fit == 'fixedHorizontal' || fit == 'fill') scaleFactorY = 1.0;
+
+						if (!this._isFullscreenPlayer) {
+							var minScreenFactorX = screenResolution.width / contentWidthPadding;
+							var minScreenFactorY = screenResolution.height / contentHeightPadding;
+							var minScaleFactorX = minScreenFactorX * 0.8;
+							var minScaleFactorY = minScreenFactorY * 0.8;
+							if (scaleFactorX < minScaleFactorX) scaleFactorX = minScaleFactorX;
+							if (scaleFactorY < minScaleFactorY) scaleFactorY = minScaleFactorY;
+						}
+
+						var scaleFactor = (scaleFactorX < scaleFactorY) ? scaleFactorX : scaleFactorY;
+
+						var aspectRatio = (contentHeightPadding > 0) ? (contentWidthPadding / contentHeightPadding) : 1.0;
+
+
+						//var doScale = (this._isFullscreenPlayer || (!(scaleFactorX >= 1.0 && scaleFactorY >= 0.65 * aspectRatio)));
+
+						var doScale = (fit != 'fill');
+						if (!this._isFullscreenPlayer) {
+							if ((fit == 'fixed' || fit == 'fixedHorizontal') && scaleFactorX >= 1.0) doScale = false;
+							if (fit == 'fixed' && scaleFactorX >= 1.0 && (scaleFactorY >= 0.65 * aspectRatio)) doScale = false; // allow small overlap in vertical
+							if (fit == 'fixedVertical' && scaleFactorY >= 1.0) doScale = false;
+						}
+						if (!doScale) {
+							scaleFactor = 1.0;
+						}
+
+						//(doScale)
+						if (true) {
+							var translateX = ((containerWidth - contentWidth * scaleFactor) * 0.5);
+							if (translateX < 0) translateX = 0;
+
+							var translateY = ((containerHeight - contentHeight * scaleFactor) * 0.5);
+							if (translateY > 40) translateY = 40;
+							if (translateY < 0) translateY = 0;
+
+							if (this._isFullscreenPlayer) {
+								var offsets = container.getBoundingClientRect();
+								var translateX = ((offsets.right - contentWidth * scaleFactor) * 0.5);
+								var translateY = ((offsets.bottom - contentHeight * scaleFactor) * 0.5);
+							}
+
+							if (fit == 'fixedVertical' || fit == 'fill') translateX = 0;
+							if (fit == 'fixedHorizontal' || fit == 'fill') translateY = 0;
+
+							transformValue = 'translate(' + translateX + 'px, ' + translateY + 'px) scale(' + scaleFactor + ')';
+							transformOriginValue = 'left top';
+						}
+					}
+				}
+
+				if (this._computeIframeScalingSupported(this._browser)) {
+					frame.style.setProperty('-webkit-transform', transformValue);
+					frame.style.setProperty('-moz-transform', transformValue);
+					frame.style.setProperty('-o-transform', transformValue);
+					frame.style.setProperty('-ms-transform', transformValue);
+					frame.style.setProperty('transform', transformValue);
+
+
+					frame.style.setProperty('-webkit-transform-origin', transformOriginValue);
+					frame.style.setProperty('-moz-transform-origin', transformOriginValue);
+					frame.style.setProperty('-o-transform-origin', transformOriginValue);
+					frame.style.setProperty('-ms-transform-origin', transformOriginValue);
+					frame.style.setProperty('transform-origin', transformOriginValue);
+				}
+			},
+			_ensureView: function () {
+				if (!this.playerActive) return;
+				if (this._resource == null) return;
+
+				if (!this._noAccessToResource) {
+					var frame = this.$$("#playerIFrame");
+					if (frame == null) {
+						this._emitIFrameForResource(this._resource);
+					}
+				}
+			},
+			_onItemNavigatePrevious: function () {
+				this._itemNavigateInner(-1);
+			},
+			_onItemNavigateNext: function () {
+				this._itemNavigateInner(1);
+			},
+			_itemNavigateInner: function (offset) {
+				if (this._assignment == null || this._assignmentResources == null) return false;
+
+				var length = this._assignmentResources.length;
+				if (length == null || length <= 0) return null;
+
+
+				var index = this._assignmentResources.indexOf(this._resource);
+				if (this._doShowSubmitScreen) index = length;
+
+				var newIndex = index + offset;
+				if (newIndex < 0) newIndex = 0;
+
+
+				if (newIndex >= length) {
+					if (this._viewMode == 'assignment-player-submit') {
+						newIndex = length;
+						this._doShowSubmitScreen = true;
+						this._transitionToResourceStart(null);
+						return;
+					}
+					else {
+						newIndex = length - 1;
+					}
+				}
+				this._doShowSubmitScreen = false;
+				if (newIndex != index) {
+					this._transitionToResourceStart(this._assignmentResources[newIndex]);
+				}
+			},
+			_signalDataRequestError: function () {
+				this.fire('iron-signal', { name: 'error', data: this.localize('dataNotLoaded') });
+			},
+			_signalLoadingError: function () {
+				// Signaling disabled - using transition logic to display delays and retries
+				//this.fire('iron-signal', { name: 'error', data: this.localize('errorWhenLoading') });
+			},
+			_trackAndLogSavingError: function (reason) {
+				var assignmentId = (this._assignment != null) ? this._assignment.id : null;
+				var resourceUUID = (this._resource != null) ? this._resource.uuid : null;
+
+				var action = 'saving failed' + ((reason != null) ? (' - ' + reason) : '') + ' [' + this._viewMode + ']';
+
+				this.$.appProxy.trackEvent('Player', action, (assignmentId != null) ? assignmentId : resourceUUID);
+				if (window.logger != null) window.logger.error('player saving failed {@AssignmentId} {@ResourceUUID} {@Attempts}', assignmentId, resourceUUID, this._attempts);
+			},
+			_signalSavingError: function () {
+				// Signaling disabled - using transition logic to display delays and retries
+				//this.fire('iron-signal', { name: 'error', data: this.localize('errorWhenSaving') });
+
+				this._trackAndLogSavingError();
+			},
+			_signalUpdatingAssignmentsResourceResult: function (completesPromise) {
+				if (this._resource == null || this._assignment === null) return;
+
+				var params = {
+					assignmentId: this._assignment.id,
+					assigneeResultId: this._assigneeResultId,
+					resourceUUID: this._resource.uuid,
+					completes: completesPromise
+				}
+				this.fire('iron-signal', { name: 'updating-assignments-resource-result', data: params });
+			},
+			_getItemIndex: function (item, array, showSubmitScreen) {
+				if (array == null || array.length == null) return 0;
+				if (showSubmitScreen) return array.length + 1;
+				return array.indexOf(item) + 1;
+			},
+			_computeAssigneeResultId: function(assignment, assigneeResult) {
+				var assigneeResultId = null;
+
+				if (assigneeResult != null) {
+					assigneeResultId = assigneeResult.id;
+				}
+				else if (assignment != null && assignment.assigneeResultId != null) {
+					assigneeResultId = assignment.assigneeResultId;
+				};
+
+				return assigneeResultId;
+			},
+			_computeNestedFullscreenSupported: function (browser) {
+				if (browser.name == 'chrome') return false;
+				if (browser.name == 'ie') return false;
+				return true;
+			},
+			_computeIframeScalingSupported: function (browser) {
+				if (browser == null || browser.name == null) return true;
+				//if (browser.name == 'ios') return false; // at least from 10.3.3 it is fixed
+				return true;
+			},
+			_loadResourceStart: function (resourceOrUUID) {
+				this._abortRequest(this.$.resourceRequest);
+
+				if (resourceOrUUID === null) {
+					this._resource = null;
+				}
+				else if (typeof resourceOrUUID === 'object' || resourceOrUUID instanceof Object) {
+					this._resource = resourceOrUUID;
+				}
+				else {
+					this._loadingResourceState = 'requesting';
+					this._resource = null;
+					this._resourceUUID = resourceOrUUID;
+					this.$.resourceRequest.generateRequest();
+				}
+			},
+			_saveResourceResultStart: function () {
+				if (!this._doStoreResults || (this._viewMode == 'resource-player' && !(this._userEduPersonId > 0))) {
+					return;
+				}
+
+				this._savingResourceResultState = 'waiting';
+				//this._attempts++; // this has been moved to load
+
+				// if not scorable submit
+				if (this._resource == null || this._resource.scorable != true) {
+					// if not scorable, call the submit right away
+
+					if (this._emitIFrameTime != null) {
+						this._sessionTimeDelta = Math.ceil((new Date() - this._emitIFrameTime) / 1000);
+					}
+
+					this.async(function () {
+						this._saveResourceResultCollectAndSubmit();
+					});
+				}
+				else {
+					// if scorable, give the content some time to call LMS Finish - if not, call the submit anyway
+					this.debounce('player_saveResourceResultCollectAndSubmit', function () {
+						this._saveResourceResultCollectAndSubmit();
+					}, 2000);
+				}
+			},
+			_saveResourceResultCollectAndSubmit: function () {
+				this._updateResourceResult();
+			},
+			_loadResourceResultStart: function () {
+				this._abortRequest(this.$.assignmentResourceResultRequest);
+				this._abortRequest(this.$.resourceResultRequest);
+
+				this._loadingResourceResultState = 'requesting';
+
+				if (this._assigneeResultId != null && this._assigneeResultId > 0) {
+					this.$.assignmentResourceResultRequest.generateRequest();
+				}
+				else {
+					this.$.resourceResultRequest.generateRequest();
+				}
+			},
+			_transitionToResourceStart: function (resourceOrUUID, startingTransition) {
+				var transition = this.$$('#transition');
+				if (transition != null) {
+					if (!startingTransition) this._deleteIFrame();
+					transition._transitionToResource(resourceOrUUID);
+				}
+				else {
+					this._loadResourceStart(resourceOrUUID);
+				}
+			},
+			_transitionStop: function () {
+				var transition = this.$$('#transition');
+				if (transition != null) {
+					transition._transitionStop();
+				}
+				if (this._loadingResourceState != '') this._loadingResourceState = '';
+				if (this._savingResourceResultState != '') this._savingResourceResultState = '';
+				if (this._loadingResourceResultState != '') this._loadingResourceResultState = '';
+			},
+			_transitionEnd: function () {
+				var transition = this.$$('#transition');
+				if (transition != null) {
+					transition._transitionStop();
+				}
+			},
+			_upkeepInnerIOS: function () {
+				var frame = this.$$("#playerIFrame");
+				var playerContentWrapper = this.$$('#playerContentWrapper');
+				if (frame != null && playerContentWrapper != null) {
+					if (this._upkeepFrameHeight != frame.offsetHeight) {
+						playerContentWrapper.style.overflow = 'inherit';
+						this.async(function () {
+							playerContentWrapper.style.overflow = 'auto';
+						});
+						this._upkeepFrameHeight = frame.offsetHeight;
+					}
+				}
+			},
+			_upkeep: function () {
+				if (this.playerActive) {
+					if (this._browser != null && this._browser.name == 'ios') {
+						this._upkeepInnerIOS();
+					}
+				}
+				this.async(this._upkeep, 1000);
+			},
+			_abortRequest: function (request) {
+				for (var i = 0; i < request.activeRequests.length; i++) {
+					request.activeRequests[i].abort();
+				}
+			},
+			_isSubmitScreenVisible: function (doShowSubmitScreen, resource) {
+				return doShowSubmitScreen && (resource == null);
+			},
+			_getCharacterImageURLSubmitScreen: function (language, appUI) {
+				if (appUI != 'kozmix') return '';
+				return 'images/character-assignment-completed.' + language + '.svg';
+			},
+			_onSubmitAssignmentTapped: function () {
+				this.async(function () { fixZoomMobile(); }, 100);
+				window.history.back();
+				this.fire('iron-signal', { name: 'submit-assignment', data: this.assignmentId });
+			},
+			_or: function (x1, x2, x3, x4, x5) {
+				return (x1 == true || x2 == true || x3 == true || x4 == true || x5 == true);
+			}
+		});
+	</script>
+</dom-module>
